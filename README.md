@@ -1,4 +1,4 @@
-# Whisper POC
+# Ada Assistant POC
 
 Proof of concept for a fully local voice assistant: Speech-to-Text + LLM + Text-to-Speech.
 
