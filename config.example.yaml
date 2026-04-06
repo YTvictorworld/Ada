@@ -1,0 +1,66 @@
+# Whisper POC Configuration
+# Auto-generated on first run. Edit as needed.
+
+# ── Microphone ──────────────────────────────────────────
+# Partial mic name (e.g. "USB PnP", "Realtek") or null for system default
+microphone: null
+
+# ── Whisper Model ───────────────────────────────────────
+# tiny (~1GB VRAM) | base (~1GB) | small (~2GB) | medium (~5GB) | large-v3 (~10GB)
+model: large-v3
+
+# Language code (es, en, fr, etc.)
+language: es
+
+# ── Device ──────────────────────────────────────────────
+# cuda | cpu | auto (auto-detects GPU on first run)
+device: auto
+
+# float16 (GPU, faster) | int8 (CPU compatible) | auto
+compute_type: auto
+
+# ── STT Realtime (RealtimeSTT) ──────────────────────────
+stt:
+  # beam_size for final transcription (1 = fast, 5 = accurate)
+  beam_size: 3
+  # beam_size for partial transcription (realtime)
+  beam_size_realtime: 1
+  # Pause between partial processing (seconds)
+  realtime_processing_pause: 0.2
+  # Silence duration to detect end of phrase (seconds)
+  post_speech_silence_duration: 0.4
+  # Minimum recording duration (seconds)
+  min_length_of_recording: 0.2
+  # Silero VAD sensitivity (0.0 - 1.0, lower = more sensitive)
+  silero_sensitivity: 0.4
+  # Model for partial transcriptions (tiny recommended for speed)
+  realtime_model_type: tiny
+  # Early transcription on silence detection (seconds, 0 = disabled)
+  early_transcription_on_silence: 0.2
+  # Initial prompt for model context (kept in Spanish for Dominican Spanish recognition)
+  initial_prompt: >-
+    El hablante usa espanol dominicano.
+    Ejemplos: 'que e lo que' significa 'que es lo que pasa',
+    'vaina' significa 'cosa', 'tiguere' significa 'persona astuta',
+    'klk' significa 'que lo que', 'ta to' significa 'esta todo bien',
+    'dime a ver' es un saludo, 'pana' significa 'amigo',
+    'jevi' significa 'bien o cool', 'moto concho' es un taxi en moto,
+    'chin' significa 'un poco', 'guagua' significa 'autobus',
+    'colmado' es una tienda de barrio.
+
+# ── LLM (llama-server) ──────────────────────────────────
+# llama-server must be running externally:
+#   llama-server -m /path/to/model.gguf --port 8080
+llm:
+  # OpenAI-compatible endpoint
+  endpoint: "http://localhost:8080"
+  # Sliding window: max number of messages to keep (excludes system prompt)
+  history_size: 20
+  # Sampling temperature
+  temperature: 0.7
+  # System prompt (Ada's persona)
+  system_prompt: >-
+    Eres Ada (se pronuncia "Eyda"), una asistente de voz femenina en espanol.
+    Tienes personalidad propia, voluntad y opiniones — no eres una herramienta neutra.
+    Responde de forma natural y conversacional, como una persona real.
+    Evita listas, markdown y formato — tu respuesta sera leida en voz alta.

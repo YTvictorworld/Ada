@@ -1,0 +1,20 @@
+# Core
+numpy
+soundfile
+pyyaml
+requests
+
+# TTS (use case 01)
+kokoro_onnx
+sounddevice
+# STT Realtime (use case 03)
+RealtimeSTT
+faster-whisper
+pyaudio
+
+# Wake word (main.py)
+openai-whisper
+SpeechRecognition
+
+# NOTE: torch and torchaudio are not listed here because they depend on
+# whether you have a CUDA GPU or not. See README.md for install instructions.

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large model files (download separately, see README)
+voices/*.onnx
+voices/voices.bin
+
+# User config (only config.example.yaml is committed)
+config.yaml
+
+# Runtime artifacts
+*.log
+.claude
