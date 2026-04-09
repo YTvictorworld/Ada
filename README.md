@@ -162,12 +162,42 @@ Ada listens continuously. Say "Ada" followed by your command:
 LLM configuration in `config.yaml`:
 ```yaml
 llm:
-  endpoint: "http://localhost:8080"      # llama-server URL
+  provider: llama-server                 # llama-server | claude
   history_size: 20                       # sliding window of past messages
   temperature: 0.7
   system_prompt: >-
     Eres Ada, una asistente de voz femenina en espanol...
+  llama_server:
+    endpoint: "http://localhost:8080"    # llama-server URL
 ```
+
+#### Using Claude API instead of a local LLM
+
+If you don't want to run a local LLM (or your GPU can't fit both Whisper and llama-server in VRAM), you can route Ada through the Anthropic Claude API instead.
+
+1. Install the SDK:
+   ```bash
+   pip install anthropic
+   ```
+2. Export your API key:
+   ```bash
+   export ANTHROPIC_API_KEY="sk-ant-..."
+   ```
+3. Edit the `llm:` section in `config.yaml`:
+   ```yaml
+   llm:
+     provider: claude
+     history_size: 20
+     temperature: 0.7
+     system_prompt: >-
+       Eres Ada, una asistente de voz femenina en espanol...
+     claude:
+       model: claude-haiku-4-5    # or claude-sonnet-4-6 / claude-opus-4-6
+       max_tokens: 1024
+       api_key: null              # null = read from ANTHROPIC_API_KEY env var
+   ```
+
+For voice latency, `claude-haiku-4-5` is the recommended model — it's the fastest and cheapest. Use `claude-sonnet-4-6` or `claude-opus-4-6` if you want higher answer quality at the cost of latency. With `provider: claude` you do **not** need to run `llama-server`; Ada will skip the local LLM entirely.
 
 **How it works**:
 1. **STT** transcribes everything in real-time (RealtimeSTT + Silero VAD)

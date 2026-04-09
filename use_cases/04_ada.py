@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.config import load_config
 from lib.device import ensure_silero_vad, ensure_whisper_model, patch_torch_hub
-from lib.llm import LLMClient
+from lib.llm import make_llm
 from lib.mic import get_input_devices, list_mics, resolve_mic_index, test_mic
 from lib.router import ConversationRouter
 from lib.sentence_buffer import SentenceBuffer
@@ -39,16 +39,40 @@ from RealtimeSTT import AudioToTextRecorder
 _STOP = object()
 
 
-def tts_player_thread(tts: KokoroTTS, q: queue.Queue):
-    """Background thread that consumes sentences and speaks them in order."""
+def tts_player_thread(tts: KokoroTTS, q: queue.Queue, recorder_ref: dict, on_done=None):
+    """Background thread that consumes sentences and speaks them in order.
+
+    Mutes the recorder while speaking so Ada does not transcribe her own voice.
+    """
+    speaking = False
     while True:
         item = q.get()
         if item is _STOP:
             break
+
+        recorder = recorder_ref.get("recorder")
+        if not speaking and recorder is not None:
+            recorder.set_microphone(False)
+            speaking = True
+
         try:
             tts.speak(item)
         except Exception as e:
             print(f"\n[tts error] {e}")
+
+        # Re-enable mic only when the queue is fully drained.
+        if speaking and q.empty() and recorder is not None:
+            try:
+                recorder.clear_audio_queue()
+            except Exception:
+                pass
+            recorder.set_microphone(True)
+            speaking = False
+            if on_done is not None:
+                try:
+                    on_done()
+                except Exception as e:
+                    print(f"\n[router error] {e}")
 
 
 def main():
@@ -75,7 +99,14 @@ def main():
     device = args.device or config["device"]
     compute_type = config["compute_type"]
     mic_name = args.mic or config.get("microphone")
-    endpoint = args.endpoint or llm_cfg.get("endpoint", "http://localhost:8080")
+
+    # Resolve LLM provider and apply --endpoint override only when it makes sense.
+    provider = llm_cfg.get("provider", "llama-server")
+    if args.endpoint:
+        if provider == "llama-server":
+            llm_cfg = {**llm_cfg, "llama_server": {**(llm_cfg.get("llama_server") or {}), "endpoint": args.endpoint}}
+        else:
+            print(f"[warn] --endpoint ignored when provider={provider}")
 
     mic_index = resolve_mic_index(mic_name) if mic_name else None
     if mic_index is not None:
@@ -86,7 +117,7 @@ def main():
         print("[mic] Microphone test failed. Continuing anyway...\n")
 
     print(f"[config] model={model} | device={device} | compute={compute_type} | lang={language}")
-    print(f"[llm] endpoint={endpoint} | history_size={llm_cfg.get('history_size', 20)}")
+    print(f"[llm] provider={provider} | history_size={llm_cfg.get('history_size', 20)}")
     print()
 
     # Pre-checks
@@ -97,18 +128,17 @@ def main():
         print(f"[error] {e}")
         sys.exit(1)
 
-    print("[init] Connecting to llama-server...")
-    llm = LLMClient(
-        endpoint=endpoint,
-        system_prompt=llm_cfg.get("system_prompt", "You are a helpful assistant."),
-        history_size=llm_cfg.get("history_size", 20),
-        temperature=llm_cfg.get("temperature", 0.7),
-    )
+    print(f"[init] Initializing LLM backend ({provider})...")
+    try:
+        llm = make_llm(llm_cfg)
+    except (ImportError, ValueError) as e:
+        print(f"[error] {e}")
+        sys.exit(1)
     err = llm.check_connection()
     if err:
         print(f"[error] {err}")
         sys.exit(1)
-    print("[init] llama-server OK.")
+    print(f"[init] {provider} OK.")
 
     ensure_whisper_model(model)
     realtime_model = stt_cfg.get("realtime_model_type", "tiny")
@@ -119,7 +149,18 @@ def main():
 
     # TTS player thread
     tts_queue: queue.Queue = queue.Queue()
-    player = threading.Thread(target=tts_player_thread, args=(tts, tts_queue), daemon=True)
+    recorder_ref: dict = {"recorder": None, "router": None}
+
+    def _on_tts_done():
+        r = recorder_ref.get("router")
+        if r is not None:
+            r.start_follow_up()
+
+    player = threading.Thread(
+        target=tts_player_thread,
+        args=(tts, tts_queue, recorder_ref, _on_tts_done),
+        daemon=True,
+    )
     player.start()
 
     def dispatch(command: str):
@@ -149,7 +190,9 @@ def main():
         wake_word=args.wake,
         max_wait=10.0,
         min_words=1,
+        follow_up_window=10.0,
     )
+    recorder_ref["router"] = router
 
     def on_realtime_update(text: str):
         if text.strip():
@@ -187,6 +230,7 @@ def main():
         recorder_kwargs["input_device_index"] = mic_index
 
     recorder = AudioToTextRecorder(**recorder_kwargs)
+    recorder_ref["recorder"] = recorder
 
     print(f"Ada is ready. Say '{args.wake}' followed by a command. (Ctrl+C to stop)\n")
 

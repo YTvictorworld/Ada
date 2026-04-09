@@ -21,6 +21,11 @@ MODELS = [
     ("large-v3", "~10GB VRAM", "Most accurate. Requires GPU with lots of VRAM."),
 ]
 
+LLM_PROVIDERS = [
+    ("llama-server", "Local LLM via llama.cpp HTTP server (private, no API cost)"),
+    ("claude",       "Anthropic Claude API (faster, higher quality, requires API key)"),
+]
+
 LANGUAGES = [
     ("es", "Spanish"),
     ("en", "English"),
@@ -80,8 +85,11 @@ def run_setup():
     # Step 6: Choose microphone
     microphone = _step_microphone()
 
-    # Step 7: Write config
-    _write_config(model, language, device, compute_type, microphone)
+    # Step 7: Choose LLM provider
+    llm_provider = _step_llm_provider()
+
+    # Step 8: Write config
+    _write_config(model, language, device, compute_type, microphone, llm_provider)
 
     print()
     print("=" * 55)
@@ -112,7 +120,7 @@ def _prompt_choice(prompt: str, options: list[str], default: int = 0) -> int:
 
 def _step_dependencies():
     """Check and install pip dependencies."""
-    print("[1/6] Checking dependencies...")
+    print("[1/7] Checking dependencies...")
     print()
 
     # Core packages to check (name_to_import: pip_package)
@@ -178,7 +186,7 @@ def _step_dependencies():
 def _step_gpu() -> tuple[str, str]:
     """Detect GPU and offer to install appropriate torch."""
     print()
-    print("[2/6] Detecting GPU...")
+    print("[2/7] Detecting GPU...")
     print()
 
     # Check if torch is installed at all
@@ -270,7 +278,7 @@ def _step_gpu() -> tuple[str, str]:
 def _step_tts_models():
     """Offer to download Kokoro TTS model files."""
     print()
-    print("[3/6] TTS models (optional)...")
+    print("[3/7] TTS models (optional)...")
     print()
 
     voices_dir = PROJECT_ROOT / "voices"
@@ -344,7 +352,7 @@ def _download_progress(block_num, block_size, total_size):
 def _step_model(device: str) -> str:
     """Let user choose a Whisper model."""
     print()
-    print("[4/6] Select Whisper model:")
+    print("[4/7] Select Whisper model:")
     print()
 
     for i, (name, vram, desc) in enumerate(MODELS):
@@ -363,7 +371,7 @@ def _step_model(device: str) -> str:
 def _step_language() -> str:
     """Let user choose language."""
     print()
-    print("[5/6] Select language:")
+    print("[5/7] Select language:")
     print()
 
     for i, (code, name) in enumerate(LANGUAGES):
@@ -378,7 +386,7 @@ def _step_language() -> str:
 def _step_microphone() -> str | None:
     """Let user choose a microphone."""
     print()
-    print("[6/6] Select microphone:")
+    print("[6/7] Select microphone:")
     print()
 
     devices = get_input_devices()
@@ -409,7 +417,27 @@ def _step_microphone() -> str | None:
     return selected
 
 
-def _write_config(model: str, language: str, device: str, compute_type: str, microphone: str | None):
+def _step_llm_provider() -> str:
+    """Let user choose an LLM provider."""
+    print()
+    print("[7/7] Select LLM provider:")
+    print()
+
+    for i, (name, desc) in enumerate(LLM_PROVIDERS):
+        print(f"  {i + 1}) {name:<13} {desc}")
+
+    choice = _prompt_choice("Provider", [p[0] for p in LLM_PROVIDERS], 0)
+    selected = LLM_PROVIDERS[choice][0]
+    print(f"  -> {selected}")
+
+    if selected == "claude":
+        print()
+        print("  Note: install with `pip install anthropic` and set ANTHROPIC_API_KEY,")
+        print("  or edit llm.claude.api_key in config.yaml.")
+    return selected
+
+
+def _write_config(model: str, language: str, device: str, compute_type: str, microphone: str | None, llm_provider: str = "llama-server"):
     """Write config.yaml from example template with user choices applied."""
     # Load example as base if it exists
     if EXAMPLE_PATH.exists():
@@ -437,6 +465,7 @@ def _write_config(model: str, language: str, device: str, compute_type: str, mic
         template = re.sub(r'^(language:).*$', f'language: {language}', template, flags=re.MULTILINE)
         template = re.sub(r'^(device:).*$', f'device: {device}', template, flags=re.MULTILINE)
         template = re.sub(r'^(compute_type:).*$', f'compute_type: {compute_type}', template, flags=re.MULTILINE)
+        template = re.sub(r'^(  provider:).*$', f'  provider: {llm_provider}', template, flags=re.MULTILINE)
 
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             f.write(template)

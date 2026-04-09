@@ -16,5 +16,8 @@ pyaudio
 openai-whisper
 SpeechRecognition
 
+# Optional: only needed if using llm.provider=claude (Anthropic API backend)
+# anthropic
+
 # NOTE: torch and torchaudio are not listed here because they depend on
 # whether you have a CUDA GPU or not. See README.md for install instructions.
